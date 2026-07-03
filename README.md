@@ -6,7 +6,7 @@ clips and presents each string as English → Nepali → phonetic romanization w
 matched player; reviewers highlight spans, attach notes, and flag rows. Export
 produces a new spreadsheet — source files are never mutated.
 
-Fully client-side: no backend, no network calls, no writes to input files.
+Fully client-side.
 
 ## Stack
 
