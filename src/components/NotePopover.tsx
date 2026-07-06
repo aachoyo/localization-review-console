@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import type { HighlightColor } from '@/lib/types'
+import type { HighlightColor, PanelName } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export interface NoteDraft {
   mode: 'new' | 'edit'
   id?: string
-  panel: 'nepali' | 'roman'
+  panel: PanelName
   start: number
   end: number
   text: string
@@ -70,9 +70,9 @@ export function NotePopover({ draft, onChange, onSave, onCancel }: Props) {
             title={c === 'orange' ? 'Phrasing / flow' : 'Serious'}
             onClick={() => onChange({ color: c })}
             className={cn(
-              'h-5 w-5 rounded-full border-2 transition-colors',
+              'h-5 w-5 rounded-full transition-shadow',
               c === 'orange' ? 'bg-sev-orange' : 'bg-sev-red',
-              draft.color === c ? 'border-white' : 'border-transparent',
+              draft.color === c ? 'ring-2 ring-[#334155] ring-offset-2' : 'ring-0',
             )}
           />
         ))}

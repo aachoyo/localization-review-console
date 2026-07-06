@@ -85,7 +85,7 @@ All of this happens in memory against a read-only copy; the workbook file is nev
 
 Dropping a submodule's audio folder yields subfolders per language (`AR BN EN HI ML NE TA TAG UR`), each containing clips whose filename stems equal the string Keys. The tool must **index audio scoped by language code**, because the same stem exists in every language folder — a flat index would collide and play the wrong language. Matching a string to a clip is then keyed by *(active language code, Key)*.
 
-Known case to decide: some strings have regional/context variant clips (e.g. `_KSA` suffix, parallel `_Retail` folders). This release should at minimum not mis-match them; surfacing variants for review is a candidate follow-up.
+**Variants are in scope.** Some strings have regional/context alternate takes — a `_KSA` filename suffix inside a language folder, and parallel `…_VO_RetailAudio/<code>/` folder sets alongside the main `…_VOAudio/<code>/` ones. The tool indexes all takes per Key and lets the reviewer **select and play each available variant** (base, KSA, Retail) from the audio player, so every version that ships actually gets reviewed rather than silently skipped.
 
 ### F5 — Manual completion checks
 
@@ -101,7 +101,7 @@ Highlighted spans must carry their color (orange/red) into the exported spreadsh
 
 ### F8 — Romanization as an optional aid
 
-Romanization is a crutch for reviewers who read Latin more fluently than the script, and is unnecessary for others. Make the romanization panel a **toggle**. Prefer a **transliteration column supplied by the source sheet** when present (the workbook already carries one for some languages); fall back to a generated romanization where an engine exists. Critically, this makes romanization a *progressive enhancement* — the new languages can ship without blocking on building three new transliteration engines.
+Romanization is a crutch for reviewers who read Latin more fluently than the script, and is unnecessary for others. Make the romanization panel a **toggle that defaults to off** — reviewers who want it opt in. When shown, prefer a **transliteration column supplied by the source sheet** when present (the workbook already carries one for some languages); fall back to a generated romanization where an engine exists. Critically, this makes romanization a *progressive enhancement* — the new languages can ship without blocking on building three new transliteration engines.
 
 ## 8. Success metrics
 
@@ -123,11 +123,16 @@ Romanization is a crutch for reviewers who read Latin more fluently than the scr
 
 - **Romanizer build-vs-buy.** New scripts need transliteration. Making romanization optional (F8) removes it from the critical path; where we do want generated output, we choose per-script between hand-rolled tables (matching the existing Devanagari engine's style) and an existing library. Decision deferred to implementation, de-risked by the toggle.
 - **Exact-span highlighting is format-limited.** Spreadsheets can color exact *text* but not the *background* behind a mid-cell span. F7 accepts colored text; a richer format is a future option if reviewers ask for a true highlighter look.
-- **Audio variants.** Regional/retail alternate takes mean Key→clip is not strictly 1:1. Phase 1 must avoid mis-matching; full variant review is a candidate follow-up.
+- **Audio variants add scope.** Supporting KSA and Retail takes means Key→clip is not 1:1: the tool must index the main and `_VO_Retail` folder trees plus `_KSA`-suffixed clips, associate them per Key, and add a variant selector to the audio player. This is deliberate scope (not a follow-up), so every shipped take is reviewed — at the cost of loading the Retail folder set alongside the main one.
 - **Deferring the backend.** In-memory state means a browser refresh loses progress. Accepted for Phase 1; local persistence is the cheap mitigation before any backend investment.
 
-## 11. Open decisions
+## 11. Decisions
+
+**Resolved**
+
+- **Audio variants:** KSA and Retail takes are supported and surfaced for review (see F4) — not deferred.
+- **Romanization default:** the panel defaults to **off**; reviewers opt in (see F8).
+
+**Still open**
 
 1. Reviewer works one submodule at a time (confirmed) — should the exported notes be **grouped per submodule sheet** (mirroring the source, easier for devs to trace) or a single flat sheet?
-2. Audio **variant policy**: ignore `_KSA`/`_Retail` variants in Phase 1, or surface them for review?
-3. Romanization **default state** per language: on or off when a reviewer first opens a language?

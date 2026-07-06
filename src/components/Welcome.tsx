@@ -15,13 +15,13 @@ export function Welcome() {
         </p>
         <ol className="mx-auto my-5 inline-block list-decimal space-y-1.5 text-left text-muted-foreground">
           <li>
-            <b className="text-foreground">Load the review sheet</b> — the <code>.xlsx</code> with Key /
-            English / Nepali columns.
+            <b className="text-foreground">Pick your language</b>, then <b className="text-foreground">load the
+            review sheet</b> — the multi-sheet <code>.xlsx</code>; only Key, English, and your language are read.
           </li>
           <li>
-            <b className="text-foreground">Load the audio folder</b> — the <code>NE</code> folder (or any
-            parent). Every <code>.mp3</code> under it is indexed by filename. You can also drag a folder onto
-            this window.
+            <b className="text-foreground">Load the audio folder</b> — the parent of the per-language folders
+            (<code>NE</code>, <code>BN</code>, …). Every <code>.mp3</code> is indexed by language + key. You can
+            also drag a folder onto this window.
           </li>
           <li>
             Read the three panels, hit <b className="text-foreground">Space</b> to hear it, select bad text to

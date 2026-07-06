@@ -12,6 +12,7 @@ interface Props {
   onSelectSpan: (panel: PanelName, span: SelectionSpan) => void
   onClickHighlight: (id: string, rect: DOMRect) => void
   className?: string
+  style?: React.CSSProperties
 }
 
 /** Render panel text with <mark> highlights sliced on sorted, non-overlapping ranges. */
@@ -54,6 +55,7 @@ export function TextPanel({
   onSelectSpan,
   onClickHighlight,
   className,
+  style,
 }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null)
   const isEmpty = !text
@@ -72,6 +74,7 @@ export function TextPanel({
       <div
         ref={bodyRef}
         onMouseUp={handleMouseUp}
+        style={style}
         className={cn(
           'whitespace-pre-wrap break-words px-4 pb-4 pt-2 leading-relaxed',
           isEmpty ? 'italic text-muted-foreground' : 'cursor-text select-text',

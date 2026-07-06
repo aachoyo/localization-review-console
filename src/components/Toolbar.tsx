@@ -13,7 +13,7 @@ export function Toolbar({ onFlagRow }: Props) {
   const total = useReviewStore((s) => s.strings.length)
 
   return (
-    <div className="flex flex-shrink-0 items-center gap-2.5 border-t border-border bg-[#12141a] px-4 py-2">
+    <div className="flex flex-shrink-0 items-center gap-2.5 border-t border-border bg-[#f8fafc] px-4 py-2">
       <Button variant="secondary" size="sm" onClick={prev} disabled={cursor <= 0}>
         <ChevronLeft /> Prev
       </Button>

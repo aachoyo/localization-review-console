@@ -116,11 +116,11 @@ Set `roman`: if the profile has `romanize`, generate from `target`; else `transF
 - `indexAudioFiles`: build a **nested index** `Map<folderCodeUpper, Map<stem, File>>` (keep a lowercase-stem fallback map per language). Rationale: identical stems across language folders — a flat index silently returns the wrong language.
 - `matchAudio(index, langFolderCode, key)`: look up within the active language's map only.
 - Ignore non-`.mp3` (existing filter handles `.mp3.meta`).
-- **Variants:** in this release, treat a clip whose stem exactly equals the Key as canonical; do not let `…_KSA` / `_Retail` variants overwrite the canonical entry. Optionally collect variant stems per key into a side list for a future UI (do not surface yet).
+- **Variants (in scope):** index all takes per Key, do not overwrite. A Key maps to a `base` clip (stem == Key), zero or more `KSA`-suffixed clips (`<Key>_KSA.mp3` in the same language folder), and `retail` clips from the parallel `…_VO_RetailAudio/<CODE>/` tree. Model as `Map<folderCodeUpper, Map<key, { base?: File; ksa?: File; retail?: File }>>` (or a `variant: 'base'|'ksa'|'retail'` tag). `matchAudio(index, code, key, variant='base')` returns the requested take. The coordinator must be able to load the Retail folder set in addition to the main one; merge both into the same index.
 
-**Update callers:** `App.tsx` `file = matchAudio(audio, activeProfile.folderCode, row.key)`; `Header.tsx` `onAudio` and `App.tsx` `onDrop` build the nested index.
+**Update callers:** `App.tsx` `file = matchAudio(audio, activeProfile.folderCode, row.key, activeVariant)`; `Header.tsx` `onAudio` and `App.tsx` `onDrop` build the nested index (merging main + Retail trees). Add an `activeVariant` piece of state and a **variant selector** in `AudioBar` that lists only the variants present for the current Key.
 
-**Acceptance:** dropping `Mod02Sub01_VOAudio/` and selecting `ne` plays the NE clip for a key; switching to `bn` plays the BN clip for the same key (no collision).
+**Acceptance:** dropping `Mod02Sub01_VOAudio/` and selecting `ne` plays the NE clip for a key; switching to `bn` plays the BN clip for the same key (no collision); a Key with a `_KSA` clip and a loaded Retail take exposes base/KSA/Retail options and each plays the correct file.
 
 ---
 
@@ -181,7 +181,7 @@ Requirements the writer must satisfy (this also subsumes the earlier styling ask
 
 **Files: `StringView.tsx` (+ store).**
 
-- Add `showRomanization: boolean` (store, default per Open Decision #3). A toggle in `Header`/`Toolbar` shows/hides the Romanized panel.
+- Add `showRomanization: boolean` (store, **default `false`** — off; reviewers opt in). A toggle in `Header`/`Toolbar` shows/hides the Romanized panel.
 - Source of romanization per row: `row.roman` = `profile.romanize?.(target)` if the profile has an engine, else `transFromSheet`. If neither exists, hide the panel automatically for that language and disable the toggle.
 - The `roman` panel must remain highlightable exactly as today (its offsets are independent of the target panel).
 
@@ -200,7 +200,6 @@ Requirements the writer must satisfy (this also subsumes the earlier styling ask
 - Backend, DB, accounts, saved progress (Phase 2). In-memory only.
 - RTL (`ar`/`ur`) rendering and bidi selection (Phase 3).
 - Editing / change-request / audio regeneration (separate team tool).
-- Surfacing audio variants in the UI (collect only; no UI this release).
 
 ## 5. Suggested file-change summary
 
@@ -209,7 +208,8 @@ Requirements the writer must satisfy (this also subsumes the earlier styling ask
 | `src/lib/languages.ts` | **new** — profile type + registry + lookups (WI-1) |
 | `src/lib/types.ts` | `nepali`→`target`; `PanelName` `'target'`; add `checked`, `submodule`; `StringStatus` values (WI-2, WI-6) |
 | `src/lib/spreadsheet.ts` | multi-sheet + code-based parse + per-lang extraction (WI-3); ExcelJS writer w/ rich-text highlights (WI-8) |
-| `src/lib/audio.ts` | path capture + nested language-scoped index + `matchAudio(code,key)` (WI-4) |
+| `src/lib/audio.ts` | path capture + nested language-scoped index + per-Key base/KSA/Retail variants + `matchAudio(code,key,variant)` (WI-4) |
+| `src/components/AudioBar.tsx` | variant selector (base/KSA/Retail) for the current Key (WI-4) |
 | `src/store/useReviewStore.ts` | `activeLang`/`availableLangs`/`setActiveLang`; `toggleChecked`; stop auto-complete; `showRomanization`; `noteAudioMode` (WI-5,6,7,9) |
 | `src/App.tsx` | audio continuity on note open/close; `matchAudio` new signature (WI-7,4) |
 | `src/components/Header.tsx` | language dropdown; audio/romanization/note-mode toggles; new `parseWorkbook` signature (WI-5,7,9) |

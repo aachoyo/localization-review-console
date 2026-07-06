@@ -2,46 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark theme tokens (ported from the original review console palette). */
-:root,
-.dark {
-  --background: #0f1115;
-  --foreground: #e6e9ef;
+/* Light theme tokens — LMS platform palette (customBlue teal accent, Inter type). */
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
 
-  --card: #181b22;
-  --card-foreground: #e6e9ef;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
 
-  --popover: #1f232c;
-  --popover-foreground: #e6e9ef;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
 
-  --border: #2a2f3a;
-  --input: #2a2f3a;
-  --ring: #4f8cff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #22ccee;
 
-  --primary: #4f8cff;
+  --primary: #088ab2;
   --primary-foreground: #ffffff;
 
-  --secondary: #1f232c;
-  --secondary-foreground: #e6e9ef;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
 
-  --muted: #1f232c;
-  --muted-foreground: #8b93a3;
+  --muted: #f1f5f9;
+  --muted-foreground: #94a3b8;
 
-  --accent: #1f232c;
-  --accent-foreground: #e6e9ef;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
 
   /* review-specific */
-  --sev-orange: #ff8a3d;
-  --sev-orange-bg: rgba(255, 138, 61, 0.28);
-  --sev-red: #ff5d5d;
-  --sev-red-bg: rgba(255, 93, 93, 0.3);
+  --sev-orange: #ea7317;
+  --sev-orange-bg: rgba(234, 115, 23, 0.16);
+  --sev-red: #dc2626;
+  --sev-red-bg: rgba(220, 38, 38, 0.15);
 
-  --status-seen: #37c97f;
-  --status-flagged: #ff5d5d;
-  --status-untouched: #5a6270;
-  --status-warn: #ffcf5c;
+  --status-seen: #16a34a;
+  --status-visited: #94a3b8;
+  --status-checked: #16a34a;
+  --status-flagged: #dc2626;
+  --status-untouched: #cbd5e1;
+  --status-warn: #eaaa08;
 
-  --radius: 0.6rem;
+  /* customBlue scale (LMS) */
+  --customBlue-50: #ecfdff;
+  --customBlue-400: #22ccee;
+  --customBlue-600: #088ab2;
+  --customBlue-700: #0e7090;
+
+  --radius: 0.5rem;
 }
 
 * {
@@ -58,8 +65,19 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Equalizer thumbnail bars (audio player) — animate only while playing. */
+@keyframes eqbar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 /* Highlight marks inside the Nepali / Romanized panels */

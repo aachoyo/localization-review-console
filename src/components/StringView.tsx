@@ -1,5 +1,7 @@
 import type { PanelName, StringRow } from '@/lib/types'
 import type { SelectionSpan } from '@/hooks/useTextSelection'
+import { profileByCode } from '@/lib/languages'
+import { useReviewStore } from '@/store/useReviewStore'
 import { TextPanel } from './TextPanel'
 import { NoteList } from './NoteList'
 
@@ -12,13 +14,31 @@ interface Props {
 }
 
 export function StringView({ row, index, total, onSelectSpan, onEditHighlight }: Props) {
-  const nepaliHls = row.highlights.filter((h) => h.panel === 'nepali')
+  const activeLang = useReviewStore((s) => s.activeLang)
+  const showRomanization = useReviewStore((s) => s.showRomanization)
+  const toggleChecked = useReviewStore((s) => s.toggleChecked)
+  const profile = profileByCode(activeLang)
+
+  const targetHls = row.highlights.filter((h) => h.panel === 'target')
   const romanHls = row.highlights.filter((h) => h.panel === 'roman')
+
+  // Romanization is available when the profile has an engine or the sheet supplied one.
+  const romanAvailable = !!profile?.romanize || !!row.transFromSheet
+  const targetLabel = profile ? `${profile.name} (${profile.code})` : 'Target'
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-4 flex items-baseline gap-4">
+      <div className="mb-4 flex items-center gap-4">
         <span className="font-mono text-[13px] text-muted-foreground">{row.key || '(no key)'}</span>
+        <label className="flex cursor-pointer select-none items-center gap-1.5 text-[13px] text-muted-foreground">
+          <input
+            type="checkbox"
+            className="size-3.5 accent-status-checked"
+            checked={row.checked}
+            onChange={() => toggleChecked(index)}
+          />
+          Reviewed
+        </label>
         <span className="ml-auto text-[13px] text-muted-foreground">
           String {index + 1} of {total}
         </span>
@@ -36,29 +56,32 @@ export function StringView({ row, index, total, onSelectSpan, onEditHighlight }:
 
       <div className="mb-3.5">
         <TextPanel
-          label="Nepali (Devanagari)"
-          panel="nepali"
-          text={row.nepali}
-          highlights={nepaliHls}
-          emptyText="(no Nepali text — skippable)"
+          label={targetLabel}
+          panel="target"
+          text={row.target}
+          highlights={targetHls}
+          emptyText="(no text — skippable)"
           onSelectSpan={onSelectSpan}
           onClickHighlight={onEditHighlight}
-          className="text-[22px]"
+          className="text-[23px] leading-[1.7]"
+          style={profile ? { fontFamily: profile.font } : undefined}
         />
       </div>
 
-      <div className="mb-3.5">
-        <TextPanel
-          label="Romanized (plain phonetic)"
-          panel="roman"
-          text={row.roman}
-          highlights={romanHls}
-          emptyText="—"
-          onSelectSpan={onSelectSpan}
-          onClickHighlight={onEditHighlight}
-          className="text-lg italic text-[#cfd6e4]"
-        />
-      </div>
+      {showRomanization && romanAvailable && (
+        <div className="mb-3.5">
+          <TextPanel
+            label="Romanized (plain phonetic)"
+            panel="roman"
+            text={row.roman}
+            highlights={romanHls}
+            emptyText="—"
+            onSelectSpan={onSelectSpan}
+            onClickHighlight={onEditHighlight}
+            className="text-lg italic leading-[1.65] text-[#475569]"
+          />
+        </div>
+      )}
 
       <NoteList row={row} />
     </div>

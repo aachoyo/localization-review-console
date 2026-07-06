@@ -12,24 +12,40 @@ import { Textarea } from '@/components/ui/textarea'
 import { useReviewStore } from '@/store/useReviewStore'
 import { useKeyboard } from '@/hooks/useKeyboard'
 import type { SelectionSpan } from '@/hooks/useTextSelection'
-import { matchAudio, indexAudioFiles, readDroppedEntries } from '@/lib/audio'
-import { parseWorkbook } from '@/lib/spreadsheet'
+import { matchAudio, indexAudioFiles, readDroppedEntries, variantsFor } from '@/lib/audio'
+import { profileByCode } from '@/lib/languages'
 import type { PanelName } from '@/lib/types'
 
 export default function App() {
   const strings = useReviewStore((s) => s.strings)
   const cursor = useReviewStore((s) => s.cursor)
   const audio = useReviewStore((s) => s.audio)
+  const activeLang = useReviewStore((s) => s.activeLang)
+  const activeVariant = useReviewStore((s) => s.activeVariant)
+  const setActiveVariant = useReviewStore((s) => s.setActiveVariant)
+  const noteAudioMode = useReviewStore((s) => s.noteAudioMode)
   const setAudio = useReviewStore((s) => s.setAudio)
   const addHighlight = useReviewStore((s) => s.addHighlight)
   const updateHighlight = useReviewStore((s) => s.updateHighlight)
   const addRowFlag = useReviewStore((s) => s.addRowFlag)
-  const loadStrings = useReviewStore((s) => s.loadStrings)
+  const loadWorkbook = useReviewStore((s) => s.loadWorkbook)
   const row = strings[cursor] ?? null
+
+  const folderCode = profileByCode(activeLang)?.folderCode ?? activeLang.toUpperCase()
 
   // ---- audio ----
   const audioRef = useRef<HTMLAudioElement>(null)
-  const file = useMemo(() => (row ? matchAudio(audio, row.key) : null), [audio, row])
+  // Memoize on the stable key (not the row object): adding a highlight replaces the
+  // row object, but the matched File reference is unchanged, so the [file] effect
+  // below won't reload/reset the element mid-note (WI-7).
+  const file = useMemo(
+    () => (row ? matchAudio(audio, folderCode, row.key, activeVariant) : null),
+    [audio, folderCode, row?.key, activeVariant],
+  )
+  const variants = useMemo(
+    () => (row ? variantsFor(audio, folderCode, row.key) : []),
+    [audio, folderCode, row?.key],
+  )
 
   useEffect(() => {
     const el = audioRef.current
@@ -46,8 +62,10 @@ export default function App() {
   const togglePlay = useCallback(() => {
     const el = audioRef.current
     if (!el || !el.src) return
-    if (el.paused) void el.play()
-    else el.pause()
+    if (el.paused) {
+      if (el.duration && el.currentTime >= el.duration) el.currentTime = 0 // restart if at end
+      void el.play()
+    } else el.pause()
   }, [])
 
   const replay = useCallback(() => {
@@ -61,6 +79,23 @@ export default function App() {
   const [draft, setDraft] = useState<NoteDraft | null>(null)
   const [flagText, setFlagText] = useState<string | null>(null) // null = closed
   const editorOpen = draft !== null || flagText !== null
+
+  // WI-7: audio continuity across note-taking. Never resets currentTime.
+  const wasPlayingRef = useRef(false)
+  const prevEditorOpen = useRef(false)
+  useEffect(() => {
+    const el = audioRef.current
+    if (el) {
+      if (editorOpen && !prevEditorOpen.current) {
+        wasPlayingRef.current = !el.paused
+        if (noteAudioMode === 'pause-resume' && !el.paused) el.pause()
+      } else if (!editorOpen && prevEditorOpen.current) {
+        if (noteAudioMode === 'pause-resume' && wasPlayingRef.current && el.src) void el.play()
+        wasPlayingRef.current = false
+      }
+    }
+    prevEditorOpen.current = editorOpen
+  }, [editorOpen, noteAudioMode])
 
   const onSelectSpan = useCallback((panel: PanelName, span: SelectionSpan) => {
     setDraft({
@@ -134,35 +169,32 @@ export default function App() {
       if (!e.dataTransfer?.items?.length) return
       e.preventDefault()
       const items = [...e.dataTransfer.items]
-      const files = await readDroppedEntries(items)
+      const scoped = await readDroppedEntries(items)
 
       // Route a dropped .xlsx to the workbook loader (same path as the Load button)
-      const xlsx = files.find((f) => f.name.toLowerCase().endsWith('.xlsx'))
+      const xlsx = scoped.find((s) => s.file.name.toLowerCase().endsWith('.xlsx'))
       if (xlsx) {
-        const baseName = xlsx.name.replace(/\.[^.]+$/, '')
+        const baseName = xlsx.file.name.replace(/\.[^.]+$/, '')
         try {
-          const { rows, warning } = await parseWorkbook(await xlsx.arrayBuffer())
+          const warning = await loadWorkbook(await xlsx.file.arrayBuffer(), baseName)
           if (warning) toast.warning(warning)
-          if (!rows.length) {
-            toast.error('No populated rows found in the sheet.')
-          } else {
-            loadStrings(rows, baseName)
-            toast.success(`Loaded ${rows.length} strings`)
-          }
+          const count = useReviewStore.getState().strings.length
+          if (!count) toast.error('No populated rows found in the workbook.')
+          else toast.success(`Loaded ${count} strings`)
         } catch (err) {
           toast.error('Could not read the spreadsheet: ' + (err as Error).message)
         }
       }
 
-      // Everything else is treated as audio
-      const audioFiles = files.filter((f) => !f.name.toLowerCase().endsWith('.xlsx'))
+      // Everything else is treated as audio (language folders preserved)
+      const audioFiles = scoped.filter((s) => !s.file.name.toLowerCase().endsWith('.xlsx'))
       if (audioFiles.length) {
         const index = indexAudioFiles(audioFiles)
         setAudio(index)
         toast.success(`${index.count} audio clips indexed`)
       }
     },
-    [setAudio, loadStrings],
+    [setAudio, loadWorkbook],
   )
 
   const loaded = strings.length > 0
@@ -192,7 +224,14 @@ export default function App() {
                   onEditHighlight={onEditHighlight}
                 />
               </div>
-              <AudioBar ref={audioRef} fileName={file?.name ?? null} onReplay={replay} />
+              <AudioBar
+                ref={audioRef}
+                fileName={file?.name ?? null}
+                onReplay={replay}
+                variants={variants}
+                activeVariant={activeVariant}
+                onVariant={setActiveVariant}
+              />
               <Toolbar onFlagRow={() => setFlagText('')} />
             </>
           )}
@@ -221,7 +260,7 @@ export default function App() {
         />
       )}
 
-      <Toaster theme="dark" position="bottom-center" richColors />
+      <Toaster theme="light" position="bottom-center" richColors />
     </div>
   )
 }

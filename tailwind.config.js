@@ -41,10 +41,23 @@ export default {
         },
         status: {
           seen: 'var(--status-seen)',
+          visited: 'var(--status-visited)',
+          checked: 'var(--status-checked)',
           flagged: 'var(--status-flagged)',
           untouched: 'var(--status-untouched)',
           warn: 'var(--status-warn)',
         },
+        // LMS teal accent scale
+        customBlue: {
+          50: 'var(--customBlue-50)',
+          400: 'var(--customBlue-400)',
+          600: 'var(--customBlue-600)',
+          700: 'var(--customBlue-700)',
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       borderRadius: {
         lg: 'var(--radius)',
