@@ -1,13 +1,14 @@
 import { Flag, X } from 'lucide-react'
-import type { StringRow } from '@/lib/types'
+import type { Highlight, RowFlag } from '@/lib/types'
 import { useReviewStore } from '@/store/useReviewStore'
 import { cn } from '@/lib/utils'
 
-export function NoteList({ row }: { row: StringRow }) {
+/** Notes for the currently shown take: its span highlights + the string's row flags. */
+export function NoteList({ highlights, rowFlags }: { highlights: Highlight[]; rowFlags: RowFlag[] }) {
   const removeHighlight = useReviewStore((s) => s.removeHighlight)
   const removeRowFlag = useReviewStore((s) => s.removeRowFlag)
 
-  const total = row.highlights.length + row.rowFlags.length
+  const total = highlights.length + rowFlags.length
   if (total === 0) return null
 
   return (
@@ -16,7 +17,7 @@ export function NoteList({ row }: { row: StringRow }) {
         Notes on this string ({total})
       </div>
 
-      {row.highlights.map((h) => (
+      {highlights.map((h) => (
         <div
           key={h.id}
           className="mb-2 flex items-start gap-3 rounded-lg border border-border bg-secondary p-2.5"
@@ -41,7 +42,7 @@ export function NoteList({ row }: { row: StringRow }) {
         </div>
       ))}
 
-      {row.rowFlags.map((f) => (
+      {rowFlags.map((f) => (
         <div
           key={f.id}
           className="mb-2 flex items-start gap-3 rounded-lg border border-border bg-secondary p-2.5"

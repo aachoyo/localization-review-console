@@ -1,9 +1,9 @@
 import { create } from 'zustand'
-import type { AudioIndex, AudioVariant } from '@/lib/audio'
+import type { AudioIndex } from '@/lib/audio'
 import { matchAudio, langFoldersInIndex } from '@/lib/audio'
 import { parseWorkbook } from '@/lib/spreadsheet'
 import { profileByCode, profileByFolder } from '@/lib/languages'
-import type { Highlight, HighlightColor, RowFlag, StringRow, StringStatus, PanelName } from '@/lib/types'
+import type { AudioVariant, Highlight, HighlightColor, RowFlag, StringRow, StringStatus, PanelName, Take } from '@/lib/types'
 import { nextId } from '@/lib/utils'
 
 export type NoteAudioMode = 'keep-playing' | 'pause-resume'
@@ -64,6 +64,24 @@ function patchAt(rows: StringRow[], index: number, fn: (r: StringRow) => StringR
   return rows.map((r, i) => (i === index ? fn(r) : r))
 }
 
+/** The take a highlight action targets: the active variant if it has a text take, else base. */
+function activeTakeVariant(row: StringRow, activeVariant: AudioVariant): AudioVariant {
+  return row.takes[activeVariant] ? activeVariant : 'base'
+}
+
+/** Immutably replace the active take of the cursor row. */
+function patchActiveTake(
+  s: { strings: StringRow[]; cursor: number; activeVariant: AudioVariant },
+  fn: (t: Take) => Take,
+): StringRow[] {
+  return patchAt(s.strings, s.cursor, (r) => {
+    const v = activeTakeVariant(r, s.activeVariant)
+    const take = r.takes[v]
+    if (!take) return r
+    return { ...r, takes: { ...r.takes, [v]: fn(take) } }
+  })
+}
+
 /** Audio folder codes present ∩ registry, as ISO codes (e.g. ['bn','ne']). */
 function deriveAvailableLangs(index: AudioIndex | null): string[] {
   const codes = new Set<string>()
@@ -93,14 +111,16 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     return strings[cursor] ?? null
   },
   statusOf: (row) => {
-    if (row.highlights.length || row.rowFlags.length) return 'flagged'
+    const anyHighlights = Object.values(row.takes).some((t) => t && t.highlights.length > 0)
+    if (anyHighlights || row.rowFlags.length) return 'flagged'
     if (row.checked) return 'checked'
     if (row.seen) return 'visited'
     return 'untouched'
   },
+  // Sidebar dot reflects the string's base audio, independent of the current pill.
   hasAudio: (row) => {
     const folder = profileByCode(get().activeLang)?.folderCode ?? get().activeLang.toUpperCase()
-    return matchAudio(get().audio, folder, row.key, get().activeVariant) !== null
+    return matchAudio(get().audio, folder, row.key, 'base') !== null
   },
 
   // WI-6: no auto-completion. Rows load untouched; navigation only marks "visited".
@@ -138,8 +158,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   setCursor: (i) => {
     const { strings } = get()
     if (i < 0 || i >= strings.length) return
-    // WI-6: mark visited only — never checked.
-    set({ cursor: i, strings: patchAt(strings, i, (r) => (r.seen ? r : { ...r, seen: true })) })
+    // WI-6: mark visited only — never checked. Reset the variant so a KSA
+    // selection doesn't leak onto the next string.
+    set({ cursor: i, activeVariant: 'base', strings: patchAt(strings, i, (r) => (r.seen ? r : { ...r, seen: true })) })
   },
   next: () => get().setCursor(get().cursor + 1),
   prev: () => get().setCursor(get().cursor - 1),
@@ -153,23 +174,23 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   addHighlight: (draft) =>
     set((s) => ({
-      strings: patchAt(s.strings, s.cursor, (r) => ({
-        ...r,
-        highlights: [...r.highlights, { id: nextId('h'), ...draft } as Highlight],
+      strings: patchActiveTake(s, (t) => ({
+        ...t,
+        highlights: [...t.highlights, { id: nextId('h'), ...draft } as Highlight],
       })),
     })),
   updateHighlight: (id, patch) =>
     set((s) => ({
-      strings: patchAt(s.strings, s.cursor, (r) => ({
-        ...r,
-        highlights: r.highlights.map((h) => (h.id === id ? { ...h, ...patch } : h)),
+      strings: patchActiveTake(s, (t) => ({
+        ...t,
+        highlights: t.highlights.map((h) => (h.id === id ? { ...h, ...patch } : h)),
       })),
     })),
   removeHighlight: (id) =>
     set((s) => ({
-      strings: patchAt(s.strings, s.cursor, (r) => ({
-        ...r,
-        highlights: r.highlights.filter((h) => h.id !== id),
+      strings: patchActiveTake(s, (t) => ({
+        ...t,
+        highlights: t.highlights.filter((h) => h.id !== id),
       })),
     })),
   addRowFlag: (comment) =>

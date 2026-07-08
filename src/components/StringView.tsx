@@ -15,15 +15,18 @@ interface Props {
 
 export function StringView({ row, index, total, onSelectSpan, onEditHighlight }: Props) {
   const activeLang = useReviewStore((s) => s.activeLang)
+  const activeVariant = useReviewStore((s) => s.activeVariant)
   const showRomanization = useReviewStore((s) => s.showRomanization)
   const toggleChecked = useReviewStore((s) => s.toggleChecked)
   const profile = profileByCode(activeLang)
 
-  const targetHls = row.highlights.filter((h) => h.panel === 'target')
-  const romanHls = row.highlights.filter((h) => h.panel === 'roman')
+  // Active take: the selected variant's text if it has one, else base.
+  const take = row.takes[activeVariant] ?? row.takes.base
+  const targetHls = take?.highlights.filter((h) => h.panel === 'target') ?? []
+  const romanHls = take?.highlights.filter((h) => h.panel === 'roman') ?? []
 
   // Romanization is available when the profile has an engine or the sheet supplied one.
-  const romanAvailable = !!profile?.romanize || !!row.transFromSheet
+  const romanAvailable = !!profile?.romanize || !!take?.transFromSheet
   const targetLabel = profile ? `${profile.name} (${profile.code})` : 'Target'
 
   return (
@@ -50,7 +53,7 @@ export function StringView({ row, index, total, onSelectSpan, onEditHighlight }:
           English
         </div>
         <div className="whitespace-pre-wrap break-words px-4 pb-4 pt-2 text-lg leading-relaxed">
-          {row.english || <span className="italic text-muted-foreground">(no English text)</span>}
+          {take?.english || <span className="italic text-muted-foreground">(no English text)</span>}
         </div>
       </section>
 
@@ -58,7 +61,7 @@ export function StringView({ row, index, total, onSelectSpan, onEditHighlight }:
         <TextPanel
           label={targetLabel}
           panel="target"
-          text={row.target}
+          text={take?.target ?? ''}
           highlights={targetHls}
           emptyText="(no text — skippable)"
           onSelectSpan={onSelectSpan}
@@ -73,7 +76,7 @@ export function StringView({ row, index, total, onSelectSpan, onEditHighlight }:
           <TextPanel
             label="Romanized (plain phonetic)"
             panel="roman"
-            text={row.roman}
+            text={take?.roman ?? ''}
             highlights={romanHls}
             emptyText="—"
             onSelectSpan={onSelectSpan}
@@ -83,7 +86,7 @@ export function StringView({ row, index, total, onSelectSpan, onEditHighlight }:
         </div>
       )}
 
-      <NoteList row={row} />
+      <NoteList highlights={take?.highlights ?? []} rowFlags={row.rowFlags} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import type { Highlight, StringRow } from './types'
+import type { AudioVariant, Highlight, RowFlag, StringRow, Take } from './types'
 import { profileByCode } from './languages'
 
 // SheetJS is large (~400 kB) and only needed on load, so it's loaded lazily and
@@ -23,6 +23,57 @@ function parenCode(header: string): string | null {
   return m ? m[1].toLowerCase() : null
 }
 
+/** One extracted sheet row before takes are grouped. */
+interface RawRow {
+  key: string
+  english: string
+  target: string
+  roman: string
+  transFromSheet: string
+  submodule: string
+}
+
+const KSA_SUFFIX = /_ksa$/i
+
+/**
+ * Group raw rows into logical strings. A key ending in `_KSA` (case-insensitive)
+ * becomes the `ksa` take of the base row whose key is the stripped value; all
+ * others are `base` takes. Base-first appearance order is preserved. A `_KSA` row
+ * with no base sibling is promoted to its own base take so it still shows.
+ */
+function groupTakes(raw: RawRow[]): StringRow[] {
+  const byBase = new Map<string, StringRow>()
+  const order: string[] = []
+
+  for (const r of raw) {
+    const isKsa = KSA_SUFFIX.test(r.key)
+    const baseKey = isKsa ? r.key.replace(KSA_SUFFIX, '') : r.key
+    const variant: AudioVariant = isKsa ? 'ksa' : 'base'
+
+    let logical = byBase.get(baseKey)
+    if (!logical) {
+      logical = { key: baseKey, submodule: r.submodule, takes: {}, rowFlags: [], seen: false, checked: false }
+      byBase.set(baseKey, logical)
+      order.push(baseKey)
+    }
+    // Base take defines the shared submodule (English is per-take).
+    if (variant === 'base') logical.submodule = r.submodule
+    const take: Take = { key: r.key, english: r.english, target: r.target, roman: r.roman, transFromSheet: r.transFromSheet, highlights: [] }
+    logical.takes[variant] = take
+  }
+
+  // Promote an orphan ksa take (no base sibling) to be the base take.
+  for (const key of order) {
+    const l = byBase.get(key)!
+    if (!l.takes.base && l.takes.ksa) {
+      l.takes.base = l.takes.ksa
+      delete l.takes.ksa
+    }
+  }
+
+  return order.map((k) => byBase.get(k)!)
+}
+
 /**
  * Parse a review workbook. Iterates ALL sheets, treating any sheet with both a
  * `Key` column and an English `(en)` column as a reviewable submodule (Summary /
@@ -43,7 +94,7 @@ export async function parseWorkbook(data: ArrayBuffer, activeCode: string): Prom
   const profile = profileByCode(active)
   const activeName = profile?.name.toLowerCase() ?? active
 
-  const rows: StringRow[] = []
+  const raw: RawRow[] = []
   const langsFound = new Set<string>()
   let sawReviewableSheet = false
   let sawActiveColumn = false
@@ -96,20 +147,18 @@ export async function parseWorkbook(data: ArrayBuffer, activeCode: string): Prom
       const target = get(cTarget)
       if (!key && !english && !target) continue // skip fully blank rows
       const transFromSheet = get(cTrans)
-      rows.push({
+      raw.push({
         key,
         english,
         target,
         roman: profile?.romanize ? (target ? profile.romanize(target) : '') : transFromSheet || '',
         transFromSheet,
         submodule: sheetName,
-        highlights: [],
-        rowFlags: [],
-        seen: false,
-        checked: false,
       })
     }
   }
+
+  const rows = groupTakes(raw)
 
   let warning: string | undefined
   if (!sawReviewableSheet) {
@@ -124,11 +173,11 @@ export async function parseWorkbook(data: ArrayBuffer, activeCode: string): Prom
   return { rows, warning, workbookLangs: [...langsFound].sort() }
 }
 
-/** Build the Notes cell text for one string. */
-export function buildNotesCell(row: StringRow): string {
+/** Build the Notes cell text for one take. */
+export function buildNotesCell(highlights: Highlight[], rowFlags: RowFlag[]): string {
   const lines: string[] = []
-  for (const h of row.highlights) lines.push(`"${h.text}" — ${h.comment}`)
-  for (const f of row.rowFlags) lines.push(f.comment)
+  for (const h of highlights) lines.push(`"${h.text}" — ${h.comment}`)
+  for (const f of rowFlags) lines.push(f.comment)
   return lines.join('\n')
 }
 
@@ -169,9 +218,41 @@ export function buildRichText(text: string, highlights: Highlight[], font: strin
   return { richText: runs }
 }
 
-/** Rich text for the target cell (highlights on the target panel). */
-export function buildTargetRichText(row: StringRow, font: string): { richText: RichRun[] } | string {
-  return buildRichText(row.target, row.highlights.filter((h) => h.panel === 'target'), font)
+/** One row to write to the export sheet — one per take (base and KSA are separate rows). */
+export interface ExportEntry {
+  key: string
+  english: string
+  submodule: string
+  target: string
+  roman: string
+  highlights: Highlight[]
+  rowFlags: RowFlag[]
+}
+
+/**
+ * Flatten logical strings into one export entry per take (base before ksa),
+ * restoring the take's own key (e.g. `G001`, `G001_KSA`) so the export mirrors the
+ * source sheet. Whole-string row flags attach to the base take only.
+ */
+export function flattenTakesForExport(rows: StringRow[]): ExportEntry[] {
+  const out: ExportEntry[] = []
+  const ORDER: AudioVariant[] = ['base', 'ksa', 'retail']
+  for (const row of rows) {
+    for (const v of ORDER) {
+      const take = row.takes[v]
+      if (!take) continue
+      out.push({
+        key: take.key,
+        english: take.english,
+        submodule: row.submodule,
+        target: take.target,
+        roman: take.roman,
+        highlights: take.highlights,
+        rowFlags: v === 'base' ? row.rowFlags : [],
+      })
+    }
+  }
+  return out
 }
 
 /** Excel forbids : \ / ? * [ ] in sheet names and caps them at 31 chars. */
@@ -202,16 +283,16 @@ export async function exportNotes(rows: StringRow[], sheetBaseName: string, acti
 
   const wb = new ExcelJS.Workbook()
 
-  // Preserve submodule order of first appearance.
-  const groups = new Map<string, StringRow[]>()
-  for (const row of rows) {
-    const key = row.submodule || 'Review Notes'
+  // One row per take; preserve submodule order of first appearance.
+  const groups = new Map<string, ExportEntry[]>()
+  for (const entry of flattenTakesForExport(rows)) {
+    const key = entry.submodule || 'Review Notes'
     if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(row)
+    groups.get(key)!.push(entry)
   }
 
   const usedNames = new Set<string>()
-  for (const [submodule, groupRows] of groups) {
+  for (const [submodule, entries] of groups) {
     const ws = wb.addWorksheet(safeSheetName(submodule, usedNames))
     ws.columns = [
       { header: 'Key', width: 22 },
@@ -229,13 +310,13 @@ export async function exportNotes(rows: StringRow[], sheetBaseName: string, acti
       cell.alignment = { wrapText: true, vertical: 'top' }
     })
 
-    for (const row of groupRows) {
+    for (const entry of entries) {
       const added = ws.addRow([
-        row.key,
-        row.english,
-        buildTargetRichText(row, targetFont),
-        buildRichText(row.roman, row.highlights.filter((h) => h.panel === 'roman'), bodyFont),
-        buildNotesCell(row),
+        entry.key,
+        entry.english,
+        buildRichText(entry.target, entry.highlights.filter((h) => h.panel === 'target'), targetFont),
+        buildRichText(entry.roman, entry.highlights.filter((h) => h.panel === 'roman'), bodyFont),
+        buildNotesCell(entry.highlights, entry.rowFlags),
       ])
       added.eachCell((cell, col) => {
         cell.alignment = { wrapText: true, vertical: 'top' }

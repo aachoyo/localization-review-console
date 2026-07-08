@@ -1,4 +1,6 @@
-export type AudioVariant = 'base' | 'ksa' | 'retail'
+import type { AudioVariant, StringRow } from './types'
+
+export type { AudioVariant }
 
 export interface KeyTakes {
   base?: File
@@ -80,11 +82,27 @@ export function indexAudioFiles(files: ScopedFile[]): AudioIndex {
   return { byLang, byLangLC, count }
 }
 
-/** All variants present for a (lang, key), in display order. */
+/** All audio variants present for a (lang, key), in display order. */
 export function variantsFor(index: AudioIndex | null, langFolderCode: string, key: string): AudioVariant[] {
   const takes = takesFor(index, langFolderCode, key)
   if (!takes) return []
   return (['base', 'ksa', 'retail'] as AudioVariant[]).filter((v) => takes[v])
+}
+
+/**
+ * Variants selectable for a logical string: the union of its text takes
+ * (`row.takes`) and its available audio variants — so the KSA pill shows when
+ * KSA *text* or *audio* exists, and Retail shows when retail audio exists.
+ */
+export function availableVariants(
+  row: StringRow,
+  index: AudioIndex | null,
+  langFolderCode: string,
+): AudioVariant[] {
+  const audioVariants = new Set(variantsFor(index, langFolderCode, row.key))
+  return (['base', 'ksa', 'retail'] as AudioVariant[]).filter(
+    (v) => row.takes[v] || audioVariants.has(v),
+  )
 }
 
 function takesFor(index: AudioIndex | null, langFolderCode: string, key: string): KeyTakes | null {

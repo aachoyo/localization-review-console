@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useReviewStore } from '@/store/useReviewStore'
 import { useKeyboard } from '@/hooks/useKeyboard'
 import type { SelectionSpan } from '@/hooks/useTextSelection'
-import { matchAudio, indexAudioFiles, readDroppedEntries, variantsFor } from '@/lib/audio'
+import { matchAudio, indexAudioFiles, readDroppedEntries, availableVariants } from '@/lib/audio'
 import { profileByCode } from '@/lib/languages'
 import type { PanelName } from '@/lib/types'
 
@@ -43,8 +43,8 @@ export default function App() {
     [audio, folderCode, row?.key, activeVariant],
   )
   const variants = useMemo(
-    () => (row ? variantsFor(audio, folderCode, row.key) : []),
-    [audio, folderCode, row?.key],
+    () => (row ? availableVariants(row, audio, folderCode) : []),
+    [audio, folderCode, row],
   )
 
   useEffect(() => {
@@ -112,7 +112,8 @@ export default function App() {
 
   const onEditHighlight = useCallback(
     (id: string, rect: DOMRect) => {
-      const h = row?.highlights.find((x) => x.id === id)
+      const take = row ? row.takes[activeVariant] ?? row.takes.base : undefined
+      const h = take?.highlights.find((x) => x.id === id)
       if (!h) return
       setDraft({
         mode: 'edit',
@@ -126,7 +127,7 @@ export default function App() {
         anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
       })
     },
-    [row],
+    [row, activeVariant],
   )
 
   const saveNote = useCallback(() => {
